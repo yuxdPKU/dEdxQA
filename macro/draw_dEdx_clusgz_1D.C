@@ -1,10 +1,17 @@
 #include <filesystem>
 #include <sPhenixStyle.C>
+#include <iostream>
+#include <fstream>
 
 std::vector<int> readNumberFromText(std::string infile);
 void draw_dEdx_clusgz_1D(std::string inputfilelist = "runList/runlist.partial")
 {
-  int verbosity = 0;
+  std::ofstream outputFile("run_ratio.txt");
+
+  if (!outputFile) {
+      std::cerr << "Can not open file" << std::endl;
+      return;
+  }
 
   SetsPhenixStyle();
   //gStyle->SetOptStat(0);
@@ -17,7 +24,7 @@ void draw_dEdx_clusgz_1D(std::string inputfilelist = "runList/runlist.partial")
     int runnumber = runlist.at(irun);
 
     TChain* chain = new TChain("tree");
-    chain->Add(Form("root/clusters_seeds_%d-*_dedxqa.root",runnumber));
+    chain->Add(Form("root_midAug_midSep/clusters_seeds_%d-*_dedxqa.root",runnumber));
 
     int nevent  = chain->GetEntries();
     cout<<"total nevent = "<<nevent<<endl;
@@ -32,32 +39,62 @@ void draw_dEdx_clusgz_1D(std::string inputfilelist = "runList/runlist.partial")
     h_track_dEdx_z0->SetMinimum();
     h_track_dEdx_z4->SetMinimum();
 
-    float xpos_z0 = h_track_dEdx_z0->GetBinCenter( h_track_dEdx_z0->GetMaximumBin() );
-    float xpos_z4 = h_track_dEdx_z4->GetBinCenter( h_track_dEdx_z4->GetMaximumBin() );
-    float z0_to_z4_ratio = xpos_z0 / xpos_z4;
-
     h_track_dEdx_z0->Scale(h_track_dEdx_z4->Integral() / h_track_dEdx_z0->Integral());
 
     float ymax = h_track_dEdx_z0->GetMaximum() > h_track_dEdx_z4->GetMaximum() ? h_track_dEdx_z0->GetMaximum() : h_track_dEdx_z4->GetMaximum();
 
     TCanvas* can = new TCanvas("can","",800,600);
     can->cd();
-  
+
     h_track_dEdx_z0->SetMaximum(1.1*ymax);
     h_track_dEdx_z0->SetLineColor(kRed);
     h_track_dEdx_z0->Draw("hist");
-    h_track_dEdx_z0->GetXaxis()->SetTitle("Events");
-    h_track_dEdx_z0->GetYaxis()->SetTitle("Mean cluster Adc corrected by path length");
+    h_track_dEdx_z0->GetXaxis()->SetTitle("Mean cluster Adc corrected by path length");
+    h_track_dEdx_z0->GetYaxis()->SetTitle("Events");
     h_track_dEdx_z4->SetLineColor(kBlue);
     h_track_dEdx_z4->Draw("hist,same");
-  
-    TPaveText *pt = new TPaveText(0.48, 0.5, 0.9, 0.9, "brNDC");
+
+    TF1 *landauFit_z0 = new TF1("landauFit_z0", "[2] * TMath::Landau(x,[0],[1])", 0, 3000);
+    TF1 *landauFit_z4 = new TF1("landauFit_z4", "[2] * TMath::Landau(x,[0],[1])", 0, 3000);
+    landauFit_z0->SetParameters(h_track_dEdx_z0->GetMean(), h_track_dEdx_z0->GetRMS(), h_track_dEdx_z0->Integral());
+    landauFit_z4->SetParameters(h_track_dEdx_z4->GetMean(), h_track_dEdx_z4->GetRMS(), h_track_dEdx_z4->Integral());
+    landauFit_z0->SetParLimits(0, 0, 3000);
+    landauFit_z4->SetParLimits(0, 0, 3000);
+    landauFit_z0->SetParLimits(1, 0, 1000);
+    landauFit_z4->SetParLimits(1, 0, 1000);
+    landauFit_z0->SetParLimits(2, 0, 2*h_track_dEdx_z0->Integral());
+    landauFit_z4->SetParLimits(2, 0, 2*h_track_dEdx_z4->Integral());
+    h_track_dEdx_z0->Fit("landauFit_z0");
+    h_track_dEdx_z4->Fit("landauFit_z4");
+
+    landauFit_z0->SetLineColor(kRed+1);
+    landauFit_z0->SetLineWidth(2);
+    landauFit_z4->SetLineColor(kBlue+1);
+    landauFit_z4->SetLineWidth(2);
+
+    landauFit_z0->Draw("same");
+    landauFit_z4->Draw("same");
+
+    //float xpos_z0 = h_track_dEdx_z0->GetBinCenter( h_track_dEdx_z0->GetMaximumBin() );
+    //float xpos_z4 = h_track_dEdx_z4->GetBinCenter( h_track_dEdx_z4->GetMaximumBin() );
+    float xpos_z0 = landauFit_z0->GetParameter(0);
+    float xpos_z4 = landauFit_z4->GetParameter(0);
+    float z0_to_z4_ratio = xpos_z0 / xpos_z4;
+
+    if (isnan(z0_to_z4_ratio))
+    {
+      continue;
+    }
+    outputFile << runnumber << " " << z0_to_z4_ratio << std::endl;
+
+    TPaveText *pt = new TPaveText(0.48, 0.45, 0.9, 0.9, "brNDC");
     pt->AddText("#it{#bf{sPHENIX}} Internal");
     pt->AddText("p+p #sqrt{s}=200 GeV");
     pt->AddText(Form("Run %d",runnumber));
     pt->AddText("Negative tracks p > 0.2 GeV");
     pt->AddText("Silicon matching (nintt > 0)");
-    pt->AddText(Form("#color[2]{HighZ} / #color[4]{LowZ} = %.2f",z0_to_z4_ratio));
+    pt->AddText(Form("Laudau Fit"));
+    pt->AddText(Form("Mean #color[2]{HighZ} / #color[4]{LowZ} = %.2f",z0_to_z4_ratio));
     pt->SetTextAlign(12);
     pt->SetTextFont(42);
     pt->SetTextSize(0.05);
@@ -65,7 +102,7 @@ void draw_dEdx_clusgz_1D(std::string inputfilelist = "runList/runlist.partial")
     pt->SetBorderSize(0);
     pt->Draw();
 
-    TLegend *legend = new TLegend(0.48, 0.35, 0.9, 0.5);
+    TLegend *legend = new TLegend(0.48, 0.30, 0.9, 0.45);
     legend->AddEntry(h_track_dEdx_z0, "Cluster Z in [-100,-80] cm", "l");
     legend->AddEntry(h_track_dEdx_z4, "Cluster Z in [-20,0] cm", "l");
     legend->SetTextSize(0.04);
@@ -90,6 +127,8 @@ void draw_dEdx_clusgz_1D(std::string inputfilelist = "runList/runlist.partial")
     delete h_track_dEdx_z0;
     delete h_track_dEdx_z4;
   }
+
+  outputFile.close();
 
 }
 
