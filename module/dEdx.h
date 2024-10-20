@@ -10,6 +10,9 @@
 #include <g4detectors/PHG4TpcCylinderGeom.h>
 #include <g4detectors/PHG4TpcCylinderGeomContainer.h>
 
+#include <globalvertex/SvtxVertexMap.h>
+#include <globalvertex/SvtxVertex.h>
+
 #include <trackbase_historic/SvtxTrackMap.h>
 #include <trackbase_historic/SvtxTrackMap_v2.h>
 #include <calobase/RawClusterContainer.h>
@@ -92,9 +95,13 @@ class dEdx : public SubsysReco
   std::vector<float> _theta;
   std::vector<float> _eta;
   std::vector<float> _phi;
-  std::vector<float> _charge;
+  std::vector<int> _charge;
   std::vector<float> _quality;
-  std::vector<float> _crossing;
+  std::vector<int> _crossing;
+  std::vector<int> _vtxvalid;
+  std::vector<float> _vx;
+  std::vector<float> _vy;
+  std::vector<float> _vz;
   std::vector<float> _dedx;
   std::vector<float> _ClusAdcPerLayerThickness_allz;
   std::vector<float> _ClusAdcPerLayerThickness_z0;
@@ -109,6 +116,7 @@ class dEdx : public SubsysReco
   std::vector<float> _ClusAdcPerLayerThickness_z9;
 
   SvtxTrackMap* trackMap = nullptr;
+  SvtxVertexMap* vertexMap = nullptr;
   ActsGeometry* acts_Geometry = nullptr;
   TrkrClusterContainer* clusterMap = nullptr;
   PHG4TpcCylinderGeomContainer* tpcGeom = nullptr;

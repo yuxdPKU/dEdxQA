@@ -3,7 +3,7 @@
 
 float Cal_Asy(float NF, float NB);
 
-void draw_dEdx_clusgz_matrix(int runnumber=52888)
+void draw_dEdx_clusgz_matrix(int runnumber=51245)
 {
   int verbosity = 0;
 
@@ -11,7 +11,7 @@ void draw_dEdx_clusgz_matrix(int runnumber=52888)
   //gStyle->SetOptStat(0);
 
   TChain* chain = new TChain("tree");
-  chain->Add(Form("root/clusters_seeds_51392-*_dedxqa.root"));
+  chain->Add(Form("root/clusters_seeds_%d-*_dedxqa.root",runnumber));
 
   int nevent  = chain->GetEntries();
   cout<<"total nevent = "<<nevent<<endl;
@@ -32,16 +32,19 @@ void draw_dEdx_clusgz_matrix(int runnumber=52888)
     h_track_dEdx_pq->GetYaxis()->SetTitle("Corrected Mean Adc / cluster");
 
     TPaveText *pt = new TPaveText(0.2, 0.7, 0.45, 0.9, "brNDC");
+    pt->AddText("#it{#bf{sPHENIX}} Internal");
+    pt->AddText("p+p #sqrt{s}=200 GeV");
+    pt->AddText(Form("Run %d",runnumber));
     pt->AddText(Form("Cluster gz in [%d,%d] cm",(int)gzmin,(int)gzmax));
     pt->SetTextAlign(12);
     pt->SetTextFont(42);
-    pt->SetTextSize(0.04);
+    pt->SetTextSize(0.05);
     pt->SetFillStyle(0);
     pt->SetBorderSize(0);
     pt->Draw();
 
     can->Update();
-    can->Print(Form("track_dEdx_pq_%d.pdf",i));
+    can->Print(Form("figure/track_dEdx_pq_run%d_%d.pdf",runnumber,i));
 
     delete can;
     delete h_track_dEdx_pq;

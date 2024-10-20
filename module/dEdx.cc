@@ -143,6 +143,10 @@ void dEdx::createBranches()
   _tree->Branch("charge", &_charge);
   _tree->Branch("quality", &_quality);
   _tree->Branch("crossing", &_crossing);
+  _tree->Branch("vtxvalid", &_vtxvalid);
+  _tree->Branch("vx", &_vx);
+  _tree->Branch("vy", &_vy);
+  _tree->Branch("vz", &_vz);
   _tree->Branch("dedx", &_dedx);
   _tree->Branch("ClusAdcPerLayerThickness_allz", &_ClusAdcPerLayerThickness_allz);
   _tree->Branch("ClusAdcPerLayerThickness_z0", &_ClusAdcPerLayerThickness_z0);
@@ -175,6 +179,10 @@ void dEdx::ResetTreeVectors()
   _charge.clear();
   _quality.clear();
   _crossing.clear();
+  _vtxvalid.clear();
+  _vx.clear();
+  _vy.clear();
+  _vz.clear();
   _dedx.clear();
   _ClusAdcPerLayerThickness_allz.clear();
   _ClusAdcPerLayerThickness_z0.clear();
@@ -206,12 +214,22 @@ int dEdx::process_event(PHCompositeNode* topNode)
     }
   }
 
+  if(!vertexMap)
+  {
+    vertexMap = findNode::getClass<SvtxVertexMap>(topNode, "SvtxVertexMap");
+    if(!vertexMap)
+    {
+      std::cout << "SvtxVertexMap not found! Aborting!" << std::endl;
+      return Fun4AllReturnCodes::ABORTEVENT;
+    }
+  }
+
   if (!acts_Geometry)
   {
     acts_Geometry = findNode::getClass<ActsGeometry>(topNode, "ActsGeometry");
     if (!acts_Geometry)
     {
-      std::cout << "ActsGeometry not on node tree. Exiting." << std::endl;
+      std::cout << "ActsGeometry not found! Aborting!" << std::endl;
       return Fun4AllReturnCodes::ABORTEVENT;
     }
   }
@@ -274,6 +292,27 @@ int dEdx::process_event(PHCompositeNode* topNode)
     _charge.push_back(track->get_charge());
     _quality.push_back(track->get_quality());
     _crossing.push_back(track->get_crossing());
+
+    unsigned int vertexid = track->get_vertex_id();
+    if (vertexMap)
+    {
+      auto vertexit = vertexMap->find(vertexid);
+      if (vertexit != vertexMap->end())
+      {
+        auto svtxvertex = vertexit->second;
+        _vx.push_back(svtxvertex->get_x());
+        _vy.push_back(svtxvertex->get_y());
+        _vz.push_back(svtxvertex->get_z());
+        _vtxvalid.push_back(1);
+      }
+      else
+      {
+        _vx.push_back(-999);
+        _vy.push_back(-999);
+        _vz.push_back(-999);
+        _vtxvalid.push_back(0);
+      }
+    }
 
     float fcorr = fabs(sin(eta_to_theta(track->get_eta())));
 
