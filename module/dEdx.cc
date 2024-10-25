@@ -3,12 +3,17 @@
 
 #include <fun4all/Fun4AllReturnCodes.h>
 
+#include <globalvertex/GlobalVertex.h>
+#include <globalvertex/GlobalVertexMap.h>
+#include <globalvertex/MbdVertexMap.h>
+#include <globalvertex/MbdVertex.h>
 #include <globalvertex/SvtxVertexMap.h>
 #include <globalvertex/SvtxVertex.h>
 
 #include <phool/getClass.h>
 #include <phool/PHCompositeNode.h>
 
+#include <trackbase/TpcDefs.h>
 #include <trackbase/TrkrCluster.h>
 #include <trackbase/TrkrClusterContainer.h>
 #include <trackbase/TrkrClusterCrossingAssocv1.h>
@@ -129,12 +134,16 @@ void dEdx::createBranches()
   _tree = new TTree("tree", "dEdx");
   _tree->Branch("runNumber", &_runNumber);
   _tree->Branch("eventNumber", &_eventNumber);
+  _tree->Branch("mbdvtxvalid", &_mbdvtxvalid);
+  _tree->Branch("mbdvz", &_mbdvz);
+  _tree->Branch("triggerVector", &_triggerVector);
   _tree->Branch("ntracks", &_ntracks);
   _tree->Branch("nhits", &_nhits);
   _tree->Branch("nmaps", &_nmaps);
   _tree->Branch("nintt", &_nintt);
   _tree->Branch("ntpc", &_ntpc);
   _tree->Branch("nmms", &_nmms);
+  _tree->Branch("nsector", &_nsector);
   _tree->Branch("p", &_p);
   _tree->Branch("pt", &_pt);
   _tree->Branch("theta", &_theta);
@@ -147,6 +156,7 @@ void dEdx::createBranches()
   _tree->Branch("vx", &_vx);
   _tree->Branch("vy", &_vy);
   _tree->Branch("vz", &_vz);
+  _tree->Branch("tracklength", &_tracklength);
   _tree->Branch("dedx", &_dedx);
   _tree->Branch("ClusAdcPerLayerThickness_allz", &_ClusAdcPerLayerThickness_allz);
   _tree->Branch("ClusAdcPerLayerThickness_z0", &_ClusAdcPerLayerThickness_z0);
@@ -183,6 +193,11 @@ void dEdx::ResetTreeVectors()
   _vx.clear();
   _vy.clear();
   _vz.clear();
+  _mbdvtxvalid.clear();
+  _mbdvz.clear();
+  _triggerVector.clear();
+  _tracklength.clear();
+  _nsector.clear();
   _dedx.clear();
   _ClusAdcPerLayerThickness_allz.clear();
   _ClusAdcPerLayerThickness_z0.clear();
@@ -219,7 +234,34 @@ int dEdx::process_event(PHCompositeNode* topNode)
     vertexMap = findNode::getClass<SvtxVertexMap>(topNode, "SvtxVertexMap");
     if(!vertexMap)
     {
-      std::cout << "SvtxVertexMap not found! Aborting!" << std::endl;
+      std::cout << "SvtxVertexMap not found! But continue!" << std::endl;
+    }
+  }
+
+  if(!globalvertexMap)
+  {
+    globalvertexMap = findNode::getClass<GlobalVertexMap>(topNode, "GlobalVertexMap");
+    if(!globalvertexMap)
+    {
+      std::cout << "GlobalVertexMap not found! But continue!" << std::endl;
+    }
+  }
+
+  if(!mbdvertexMap)
+  {
+    mbdvertexMap = findNode::getClass<MbdVertexMap>(topNode, "MbdVertexMap");
+    if(!mbdvertexMap)
+    {
+      std::cout << "MbdVertexMap not found! But continue!" << std::endl;
+    }
+  }
+
+  if(!gl1Packet)
+  {
+    gl1Packet = findNode::getClass<Gl1Packet>(topNode, "GL1RAWHIT");
+    if(!gl1Packet)
+    {
+      std::cout << "GL1RAWHIT not found! Aborting!" << std::endl;
       return Fun4AllReturnCodes::ABORTEVENT;
     }
   }
@@ -275,6 +317,43 @@ int dEdx::process_event(PHCompositeNode* topNode)
     _eventNumber = -1;
   }
 
+  if (mbdvertexMap)
+  {
+    MbdVertex *bvertex = nullptr;
+    for (MbdVertexMap::ConstIter bbciter = mbdvertexMap->begin();
+         bbciter != mbdvertexMap->end();
+         ++bbciter)
+    {
+      bvertex = bbciter->second;
+    }
+    if (!bvertex)
+    {
+      _mbdvtxvalid.push_back(0);
+      _mbdvz.push_back(-999);
+    }
+    else
+    {
+      _mbdvtxvalid.push_back(1);
+      _mbdvz.push_back(bvertex->get_z());
+    }
+  }
+  else
+  {
+      _mbdvtxvalid.push_back(0);
+      _mbdvz.push_back(-999);
+  }
+
+  if (gl1Packet)
+  {
+    uint64_t triggervec = gl1Packet->getScaledVector();
+    for (int i = 0; i < 64; i++)
+    {
+      bool trig_decision = ((triggervec & 0x1U) == 0x1U);
+      _triggerVector.push_back(trig_decision);
+      triggervec = (triggervec >> 1U) & 0xffffffffU;
+    }
+  }
+
   SvtxTrack *track = nullptr;
 
   _ntracks = trackMap->size();
@@ -320,6 +399,7 @@ int dEdx::process_event(PHCompositeNode* topNode)
     int m_nintt = 0;
     int m_ntpc = 0;
     int m_nmms = 0;
+    std::set<int> uniquesector;
 
     auto tpcseed = track->get_tpc_seed();
     auto silseed = track->get_silicon_seed();
@@ -332,6 +412,8 @@ int dEdx::process_event(PHCompositeNode* topNode)
     // get the fully corrected cluster global positions
     std::vector<std::pair<TrkrDefs::cluskey, Acts::Vector3>> global_raw;
     std::vector<std::pair<TrkrDefs::cluskey, Acts::Vector3>> global_moved;
+    float minR = std::numeric_limits<float>::max();
+    float maxR = 0;
     for (const auto& ckey : get_cluster_keys(track))
     {
       auto cluster = clusterMap->findCluster(ckey);
@@ -341,7 +423,16 @@ int dEdx::process_event(PHCompositeNode* topNode)
 
       // add the global positions to a vector to give to the cluster mover
       global_raw.emplace_back(std::make_pair(ckey, global));
+      if (r(global.x(), global.y()) < minR)
+      {
+        minR = r(global.x(), global.y());
+      }
+      if (r(global.x(), global.y()) > maxR)
+      {
+        maxR = r(global.x(), global.y());
+      }
     }
+    _tracklength.push_back(maxR - minR);
 
     // move the corrected cluster positions back to the original readout surface
     global_moved = m_clusterMover.processTrack(global_raw);
@@ -376,6 +467,7 @@ int dEdx::process_event(PHCompositeNode* topNode)
       else if (detid == TrkrDefs::TrkrId::tpcId)
       {
         m_ntpc++;
+        uniquesector.insert(TpcDefs::getSectorId(ckey));
       }
       else if (detid == TrkrDefs::TrkrId::micromegasId)
       {
@@ -451,6 +543,7 @@ int dEdx::process_event(PHCompositeNode* topNode)
     _nintt.push_back(m_nintt);
     _ntpc.push_back(m_ntpc);
     _nmms.push_back(m_nmms);
+    _nsector.push_back(uniquesector.size());
 
     adc_allz /= nclus_allz;
     adc_z0 /= nclus_z0;

@@ -10,6 +10,12 @@
 #include <g4detectors/PHG4TpcCylinderGeom.h>
 #include <g4detectors/PHG4TpcCylinderGeomContainer.h>
 
+#include <ffarawobjects/Gl1Packet.h>
+
+#include <globalvertex/GlobalVertex.h>
+#include <globalvertex/GlobalVertexMap.h>
+#include <globalvertex/MbdVertexMap.h>
+#include <globalvertex/MbdVertex.h>
 #include <globalvertex/SvtxVertexMap.h>
 #include <globalvertex/SvtxVertex.h>
 
@@ -83,6 +89,11 @@ class dEdx : public SubsysReco
 
   int _runNumber = 0;
   int _eventNumber = 0;
+
+  std::vector<int> _mbdvtxvalid;
+  std::vector<float> _mbdvz;
+  std::vector<bool> _triggerVector;
+
   int _ntracks = 0;
   std::vector<int> _nhits;
   std::vector<int> _nmaps;
@@ -102,6 +113,8 @@ class dEdx : public SubsysReco
   std::vector<float> _vx;
   std::vector<float> _vy;
   std::vector<float> _vz;
+  std::vector<float> _tracklength;
+  std::vector<int> _nsector;
   std::vector<float> _dedx;
   std::vector<float> _ClusAdcPerLayerThickness_allz;
   std::vector<float> _ClusAdcPerLayerThickness_z0;
@@ -115,6 +128,9 @@ class dEdx : public SubsysReco
   std::vector<float> _ClusAdcPerLayerThickness_z8;
   std::vector<float> _ClusAdcPerLayerThickness_z9;
 
+  Gl1Packet* gl1Packet = nullptr;
+  GlobalVertexMap* globalvertexMap = nullptr;
+  MbdVertexMap* mbdvertexMap = nullptr;
   SvtxTrackMap* trackMap = nullptr;
   SvtxVertexMap* vertexMap = nullptr;
   ActsGeometry* acts_Geometry = nullptr;
