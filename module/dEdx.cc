@@ -234,7 +234,10 @@ int dEdx::process_event(PHCompositeNode* topNode)
     vertexMap = findNode::getClass<SvtxVertexMap>(topNode, "SvtxVertexMap");
     if(!vertexMap)
     {
-      std::cout << "SvtxVertexMap not found! But continue!" << std::endl;
+      if (Verbosity()>0)
+      {
+        std::cout << "SvtxVertexMap not found! But continue!" << std::endl;
+      }
     }
   }
 
@@ -243,7 +246,10 @@ int dEdx::process_event(PHCompositeNode* topNode)
     globalvertexMap = findNode::getClass<GlobalVertexMap>(topNode, "GlobalVertexMap");
     if(!globalvertexMap)
     {
-      std::cout << "GlobalVertexMap not found! But continue!" << std::endl;
+      if (Verbosity()>0)
+      {
+        std::cout << "GlobalVertexMap not found! But continue!" << std::endl;
+      }
     }
   }
 
@@ -252,7 +258,10 @@ int dEdx::process_event(PHCompositeNode* topNode)
     mbdvertexMap = findNode::getClass<MbdVertexMap>(topNode, "MbdVertexMap");
     if(!mbdvertexMap)
     {
-      std::cout << "MbdVertexMap not found! But continue!" << std::endl;
+      if (Verbosity()>0)
+      {
+        std::cout << "MbdVertexMap not found! But continue!" << std::endl;
+      }
     }
   }
 
